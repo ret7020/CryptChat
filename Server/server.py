@@ -2,27 +2,29 @@ import socket
 import json
 import hashlib
 import sqlite3
+import threading
+from uuid import uuid4
 
 class Server:
     def __init__(self, listen_from, port):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind(('', port))
         self.sock.listen()
-        self.clients = {}
+        self.clients = []
 
 
 class DB:
     def __init__(self, db_path):
         self.db_path = db_path
-        self.connection = sqlite3.connect(db_path)
-        self.cursor = con.cursor()
+        self.connection = sqlite3.connect(db_path, check_same_thread=False)
+        self.cursor = self.connection.cursor()
 
     def auth_client(self, user_id, user_pass_hash):
-        data = self.cursor.execute("SELECT * FROM `users` WHERE `id` = 1 AND `password` = :pass_hash", {"pass_hash": user_pass_hash}) # 1160130875fda0812c99c5e3f1a03516471a6370c4f97129b221938eb4763e63
-        print(data)
+        data = self.cursor.execute("SELECT * FROM `users` WHERE `id` = 1 AND `password` = :pass_hash", {"pass_hash": user_pass_hash}).fetchall()
+        return data
 
 class User:
-    def __init__(self, conn, user_id, sended_hash, nick=None, token=None, authed=False):
+    def __init__(self, conn, user_id=None, sended_hash=None, nick=None, token=None, authed=False):
         self.conn = conn
         self.user_id = user_id
         self.sended_hash = sended_hash
@@ -38,20 +40,33 @@ class User:
                 data = json.loads(data)
                 if not self.authed:
                     if data["cmd"] == 0:
-                        pass
+                        self.user_id = data["user_id"]
+                        self.sended_hash = data["user_pass"]
+                        if db.auth_client(self.user_id, self.sended_hash):
+                            self.token = str(uuid4())
+                            self.conn.send(json.dumps({"auth": True, "token": self.token}).encode("utf-8"))
+                        else:
+                            self.conn.send(json.dumps({"auth": False}).encode("utf-8"))
                     else:
                         self.conn.close()
                         self.__del__()
-
-            except:
+            except json.decoder.JSONDecodeError:
                 pass
+
+            
     def __del__(self):
         pass
 
 if __name__ == "__main__":
-    server = Server("", 5000)
-    while True:
-        conn, addr = server.accept()
-        print(addr)
-        print("[LOG] New client")
-    
+    try:
+        server = Server("", 5001)
+        db = DB("data/database")
+        while True:
+            conn, addr = server.sock.accept()
+            server.clients.append(User(conn))
+            threading.Thread(target=server.clients[-1].listen_thread).start()
+            print(addr)
+            print("[LOG] New client")
+    except KeyboardInterrupt:
+        server.sock.close()
+
