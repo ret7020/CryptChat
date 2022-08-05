@@ -4,6 +4,7 @@ import hashlib
 import sqlite3
 import threading
 from uuid import uuid4
+import os
 
 class Server:
     def __init__(self, listen_from, port):
@@ -20,7 +21,7 @@ class DB:
         self.cursor = self.connection.cursor()
 
     def auth_client(self, user_id, user_pass_hash):
-        data = self.cursor.execute("SELECT * FROM `users` WHERE `id` = 1 AND `password` = :pass_hash", {"pass_hash": user_pass_hash}).fetchall()
+        data = self.cursor.execute("SELECT * FROM `users` WHERE `id` = :user_id AND `password` = :pass_hash", {"pass_hash": user_pass_hash, "user_id": user_id}).fetchall()
         return data
 
 class User:
@@ -45,13 +46,22 @@ class User:
                         if db.auth_client(self.user_id, self.sended_hash):
                             self.token = str(uuid4())
                             self.conn.send(json.dumps({"auth": True, "token": self.token}).encode("utf-8"))
+                            self.check_pub_key()
                         else:
                             self.conn.send(json.dumps({"auth": False}).encode("utf-8"))
-                    else:
+                    elif data["cmd"] == 1:
+                        key = data["key"]
+                        with open(os.path.join("data/UserKeys", f"pub_key_u_{self.user_id}"), "w") as file:
+                            file.write(key)
+                    elif not self.authed:
                         self.conn.close()
                         self.__del__()
             except json.decoder.JSONDecodeError:
                 pass
+
+    def check_pub_key(self):
+        if not(os.path.exists(os.path.join("data/UserKeys", f"pub_key_u_{self.user_id}"))):
+            self.conn.send(json.dumps({"cmd": 1}).encode("utf-8")) # req to client
 
             
     def __del__(self):
@@ -59,7 +69,7 @@ class User:
 
 if __name__ == "__main__":
     try:
-        server = Server("", 5001)
+        server = Server("", 5002)
         db = DB("data/database")
         while True:
             conn, addr = server.sock.accept()

@@ -6,7 +6,7 @@ import rsa
 
 
 class Connection:
-    def __init__(self, user_id, user_pass_hash, server_ip="localhost", server_port=5001, local_storage="./LocalStorage"):
+    def __init__(self, user_id, user_pass_hash, server_ip="localhost", server_port=5002, local_storage="./LocalStorage"):
         self.user_id = user_id
         self.user_pass_hash = user_pass_hash
         self.token = None
@@ -58,8 +58,13 @@ class Connection:
     def auth(self):
         auth_dict = {"cmd": 0, "user_id": self.user_id, "user_pass": self.user_pass_hash}
         self.sock.send(json.dumps(auth_dict).encode("utf-8")) 
-        data = self.sock.recv(1024)
-        print(data)
+        data = json.loads(self.sock.recv(1024).decode("utf-8"))
+        if not data["auth"]:
+            self.sock.close()
+            exit(1)
+
+    def share_pub_key(self):
+        self.sock.send(json.dumps({"cmd": 1, "key": self.pub.save_pkcs1().decode('utf8')}).encode("utf-8"))
 
 
 user_id = int(input("User id:"))
@@ -70,6 +75,11 @@ connection.check_crypto_keys()
 connection.auth()
 while True:
     data = connection.sock.recv(1024)
-    print(data)
+    try:
+        data = json.loads(data)
+        if data["cmd"] == 1:
+            connection.share_pub_key()
+    except json.decoder.JSONDecodeError:
+        pass
     
 connection.sock.close()
