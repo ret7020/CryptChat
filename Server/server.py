@@ -5,6 +5,7 @@ import sqlite3
 import threading
 from uuid import uuid4
 import os
+from db import DB
 
 class Server:
     def __init__(self, listen_from, port):
@@ -14,15 +15,6 @@ class Server:
         self.clients = []
 
 
-class DB:
-    def __init__(self, db_path):
-        self.db_path = db_path
-        self.connection = sqlite3.connect(db_path, check_same_thread=False)
-        self.cursor = self.connection.cursor()
-
-    def auth_client(self, user_id, user_pass_hash):
-        data = self.cursor.execute("SELECT * FROM `users` WHERE `id` = :user_id AND `password` = :pass_hash", {"pass_hash": user_pass_hash, "user_id": user_id}).fetchall()
-        return data
 
 class User:
     def __init__(self, conn, user_id=None, sended_hash=None, nick=None, token=None, authed=False):
@@ -62,6 +54,9 @@ class User:
     def check_pub_key(self):
         if not(os.path.exists(os.path.join("data/UserKeys", f"pub_key_u_{self.user_id}"))):
             self.conn.send(json.dumps({"cmd": 1}).encode("utf-8")) # req to client
+
+    def get_convs(self):
+        pass
 
             
     def __del__(self):

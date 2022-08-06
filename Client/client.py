@@ -3,6 +3,7 @@ import json
 import hashlib
 import os
 import rsa
+import threading
 
 
 class Connection:
@@ -63,9 +64,24 @@ class Connection:
             self.sock.close()
             exit(1)
 
+    def send_message(self, user_to_send, message):
+        pass
+
     def share_pub_key(self):
         self.sock.send(json.dumps({"cmd": 1, "key": self.pub.save_pkcs1().decode('utf8')}).encode("utf-8"))
 
+    def input_thread(self):
+        while True:
+            raw_inp = input(f"{self.user_id}>")
+            try:
+                if raw_inp:
+                    splitted = raw_inp.split()
+                    cmd = splitted[0]
+                    if cmd == "/send":
+                        send_to = int(splitted[1])
+                        message = splitted[1:]
+            except:
+                pass
 
 user_id = int(input("User id:"))
 user_pass = input("User pass:")
@@ -73,6 +89,7 @@ user_pass_hash = hashlib.sha256(user_pass.encode('utf-8')).hexdigest()
 connection = Connection(user_id, user_pass_hash)
 connection.check_crypto_keys()
 connection.auth()
+threading.Thread(target=connection.input_thread).start()
 while True:
     data = connection.sock.recv(1024)
     try:
